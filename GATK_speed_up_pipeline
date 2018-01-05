@@ -1,3 +1,18 @@
+-1explore the input directory and collect all the input file names
+generate_file_name.pl
+-2. fastqc
+implement_fastqc.pl
+-3. merge the single fastqc reports together
+multiqc
+-4. split the fastq and filter lowquality reads
+implement_virusseq_multi_crossreads.pl
+-5. check the resutls of split and fitler
+check_pipe_line_v1.pl
+-6. implement alignment for sub files
+implement_subfile_alignment.pl
+-7. merge the sub bam files
+
+
 The input is aligned bam files.
 1. sort the bam files
 module load samtools
@@ -14,5 +29,9 @@ java -jar /hpc/packages/minerva-common/picard/1.93/bin/AddOrReplaceReadGroups.ja
 samtools index alignment_KY16K404.sorted.rmdup.good.bam
 5. indel realignment by chromosome
 imple_realignertargetcreator_chr.pl
+imple_indelrealigner_chr.pl
+6. implement base quality recalibration for each chomosome
+imple_basequalityrecalibration_chr.pl
 
-
+ordinary whole genenome sequencing
+KY16K404_gatk_call_variants.lsf
