@@ -1,0 +1,71 @@
+#!/bin/bash
+#BSUB -P acc_GTEX
+#BSUB -q premium
+#BSUB -J gatk_cv_404
+##BSUB -n 8
+##BSUB -R "span[ptile=8]"
+#BSUB -R "rusage[mem=15000]"
+#BSUB -W 24:00
+#BSUB -m mothra
+#BSUB -o /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/KY16K404_gatk_call_variants.stdout
+#BSUB -eo /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/KY16K404_gatk_call_variants.stderr
+#BSUB -L /bin/bash
+module load samtools
+cd /sc/orga/projects/zhuj05a/Wenhui/QC/split_filter_align/KY16K404/align_hsa
+samtools sort alignment_KY16K404.bam  alignment_KY16K404.sorted
+ln -s /sc/orga/projects/zhuj05a/Wenhui/QC/split_filter_align/KY16K404/align_hsa/alignment_KY16K404.sorted.bam /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/alignment_KY16K404.sorted.bam
+cd /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/
+
+deduplication
+java -jar /hpc/packages/minerva-common/picard/1.93/bin/MarkDuplicates.jar INPUT=alignment_KY16K404.sorted.bam OUTPUT=alignment_KY16K404.sorted.rmdup.bam REMOVE_DUPLICATES=true METRICS_FILE=dup.txt VALIDATION_STRINGENCY=LENIENT
+samtools index alignment_KY16K404.sorted.rmdup.bam
+
+java -jar /hpc/packages/minerva-common/picard/1.93/bin/AddOrReplaceReadGroups.jar INPUT=alignment_KY16K404.sorted.rmdup.bam OUTPUT=alignment_KY16K404.sorted.rmdup.good.bam RGSM=KY16K404 RGLB=WGS RGPL=illumina RGPU=none VALIDATION_STRINGENCY=LENIENT
+samtools index alignment_KY16K404.sorted.rmdup.good.bam
+
+indel realignement
+java -jar /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T RealignerTargetCreator -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -I alignment_KY16K404.sorted.rmdup.good.bam -o Reads_1.realigner.intervals
+
+generate:
+alignment_KY16K404.sorted.rmdup.good.realigned.bam
+
+base quality recalibration
+samtools sort alignment_KY16K404.sorted.rmdup.good.realigned.bam alignment_KY16K404.sorted.rmdup.good.realigned.sorted
+samtools index alignment_KY16K404.sorted.rmdup.good.realigned.sorted.bam
+
+java -jar /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T BaseRecalibrator -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -I  alignment_KY16K404.sorted.rmdup.good.realigned.sorted.bam -knownSites /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/dbsnp_146.hg38.vcf.gz -knownSites /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz -o recal.table
+
+java -jar -Xmx4g /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T PrintReads -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -BQSR /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/recal_new.table -I /hpc/users/wangm08/scratch/QC/KY16K404/alignment_KY16K404.sorted.rmdup.good.realigned.sorted.bam -o /hpc/users/wangm08/scratch/QC/KY16K404/alignment_KY16K404.sorted.rmdup.good.realigned.sorted.recal.bam
+
+
+haplotypecaller
+java -jar -Xmx4g /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T HaplotypeCaller -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -I /hpc/users/wangm08/scratch/QC/KY16K404/alignment_KY16K404.sorted.rmdup.good.realigned.sorted.recal.bam --dbsnp /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/dbsnp_146.hg38.vcf.gz -o  /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw.vcf  -stand_call_conf 30 -stand_emit_conf 10
+
+variant quality recalibration
+snp quality recalibration
+java -jar -Xmx4g /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T VariantRecalibrator -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -input /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_new.vcf -resource:hapmap,known=false,training=true,truth=ture,prior=15 /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hapmap_3.3.hg38.vcf.gz -resource:omni,known=false,training=true,truth=true,prior=12.0 /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/1000G_omni2.5.hg38.vcf.gz -resource:1000G,known=false,training=true,truth=false,prior=10.0 /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz -resource:dbsnp,known=true,training=false,truth=false,prior=2.0 /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/dbsnp_146.hg38.vcf.gz -an DP -an QD -an FS -an SOR -an MQRankSum -an ReadPosRankSum --maxGaussians 4 -mode SNP -tranche 100 -tranche 99.9 -tranche 99.0 -tranche 90.0 -recalFile recalibrate_SNP.recal -tranchesFile recalibrate_SNP.tranches -rscriptFile recalibrate_SNP_plots.R
+
+java -jar -Xmx4g /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar \
+-T ApplyRecalibration \
+-R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa \
+-input /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_new.vcf \
+-mode SNP \
+--ts_filter_level 99.0 \
+-recalFile recalibrate_SNP.recal \
+-tranchesFile recalibrate_SNP.tranches \
+-o /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_snp_recalibrated_raw_indels.vcf
+
+indel quality recalibration
+
+java -jar -Xmx4g /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T VariantRecalibrator  -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -input /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_snp_recalibrated_raw_indels.vcf  -resource:mills,known=false,training=true,truth=true,prior=12.0 /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz  -resource:dbsnp,known=true,training=false,truth=false,prior=2.0 /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/dbsnp_146.hg38.vcf.gz  -an QD -an DP -an FS -an SOR -an MQRankSum -an ReadPosRankSum -mode INDEL -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 --maxGaussians 4 -recalFile recalibrate_INDEL.recal -tranchesFile recalibrate_INDEL.tranches -rscriptFile recalibrate_INDEL_plots.R
+
+java -jar -Xmx4g /hpc/packages/minerva-common/gatk/3.6-0/src/GenomeAnalysisTK.jar -T ApplyRecalibration -R /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/hg38.fa -input /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_snp_recalibrated_raw_indels.vcf -mode INDEL --ts_filter_level 99.0 -recalFile recalibrate_INDEL.recal -tranchesFile recalibrate_INDEL.tranches -o /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_snp_recalibrated_variants.vcf
+
+vcf filter:
+generate raw_snp_recalibrated_variants_filtered.vcf
+
+annotation
+
+perl /hpc/users/wangm08/packages/annovar/annovar/table_annovar.pl /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_snp_recalibrated_variants_filtered.vcf /sc/orga/projects/zhuj05a/Wenhui/IBD/data/hg38/annovar_db_hg38/humandb/ -buildver hg38 -out /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/raw_snp_recalibrated_variants_filtered_annovarx -remove -protocol knownGene,1000g2015aug_all,cosmic70,clinvar_20161128 -operation g,f,f,f -nastring . -vcfinput
+
+
