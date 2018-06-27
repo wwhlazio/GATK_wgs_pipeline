@@ -24,7 +24,7 @@ cd /sc/orga/projects/zhuj05a/Wenhui/QC/GATK_call_variants/KY16K404/
 java -jar /hpc/packages/minerva-common/picard/1.93/bin/MarkDuplicates.jar INPUT=alignment_KY16K404.sorted.bam OUTPUT=alignment_KY16K404.sorted.rmdup.bam REMOVE_DUPLICATES=true METRICS_FILE=dup.txt VALIDATION_STRINGENCY=LENIENT
 3. index the bam file
 samtools index alignment_KY16K404.sorted.rmdup.bam
-4. add read group
+4. add read group (check group status: samtools stats --split RG sample.bam | grep '^SN', GATK tools generally requre at leat one read group)
 java -jar /hpc/packages/minerva-common/picard/1.93/bin/AddOrReplaceReadGroups.jar INPUT=alignment_KY16K404.sorted.rmdup.bam OUTPUT=alignment_KY16K404.sorted.rmdup.good.bam RGSM=KY16K404 RGLB=WGS RGPL=illumina RGPU=none VALIDATION_STRINGENCY=LENIENT
 samtools index alignment_KY16K404.sorted.rmdup.good.bam
 5. indel realignment by chromosome
